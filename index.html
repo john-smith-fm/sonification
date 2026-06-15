@@ -21,12 +21,12 @@ body {
   overflow:hidden;
 }
 #nav {
-  height:70px;
+  height:100px;
   display:flex;
   justify-content:center;
   gap:clamp(20px,4vw,60px);
   align-items:center;
-  border-bottom:1px solid #333;
+  border-bottom:0px solid #333;
   position:relative;
   z-index:3;
   padding:0 20px;
@@ -48,7 +48,7 @@ body {
   bottom:120px;
   z-index:0;
   font-family:"Helvetica Neue UltraLight","Helvetica Neue","SF Pro Display",Arial,sans-serif;
-  font-size:clamp(150px,22vw,360px);
+  font-size:clamp(150px,22vw,260px);
   font-weight:100;
   letter-spacing:-0.035em;
   line-height:.85;
@@ -88,8 +88,9 @@ svg {
 .tick { stroke:var(--axis); stroke-width:1; opacity:.7; }
 .label { fill:var(--text); font-size:16px; }
 .tickLabel { fill:#555; font-size:12px; }
-.point { fill:var(--point); opacity:.7; cursor:pointer; }
-.point.active{fill:#fff36a;opacity:.8}
+.point { fill:var(--point); opacity:.40; cursor:pointer; }
+.point.played{opacity:.80}
+.point.active{fill:#fff36a;opacity:1.00}
 #tooltip {
   position:fixed;
   display:none;
@@ -144,7 +145,10 @@ function stopPlayback(){
  playBtn.textContent='click to play';
 
  currentMovies.forEach(movie=>{
-   if(movie.element) movie.element.classList.remove('active');
+   if(movie.element){
+     movie.element.classList.remove('active');
+     movie.element.classList.remove('played');
+   }
  });
 }
 
@@ -180,10 +184,15 @@ function draw(){
   t.setAttribute('class',cls); svg.appendChild(t); return t;
  }
  line(left,bottom,right,bottom);
- line(left,top,left,bottom);
 
- const yl=text('IMDb score',54,220,'label');
- yl.setAttribute('transform','rotate(-90 54 220)');
+ const axisTop=top+40;
+ line(left,axisTop,left,bottom);
+
+ const ylX=left-25;
+ const ylY=(axisTop+bottom)/2;
+ const yl=text('IMDb score',ylX,ylY,'label');
+ yl.setAttribute('text-anchor','middle');
+ yl.setAttribute('transform',`rotate(-90 ${ylX} ${ylY})`);
  text('years',right+10,bottom+5,'label');
 
 
@@ -196,6 +205,7 @@ function draw(){
   c.setAttribute('cy',y);
   c.setAttribute('r',6);
   c.setAttribute('class','point');
+  movie.played=false;
   c.onclick=(e)=>{
    e.stopPropagation();
    tooltip.style.display='block';
@@ -299,6 +309,14 @@ playBtn.onclick=async()=>{
 
  const localToken=++playToken;
  isPlaying=true;
+ currentMovies.forEach(movie=>{
+   movie.played=false;
+
+   if(movie.element){
+     movie.element.classList.remove('played');
+     movie.element.classList.remove('active');
+   }
+ });
  playBtn.classList.add('playing');
  playBtn.textContent='playing';
 
@@ -345,8 +363,13 @@ playBtn.onclick=async()=>{
          const active=now>=event.start && now<event.end;
 
          event.movies.forEach(movie=>{
-           if(movie.element){
-             movie.element.classList.toggle('active',active);
+           if(!movie.element) return;
+
+           movie.element.classList.toggle('active',active);
+
+           if(now>=event.end){
+             movie.played=true;
+             movie.element.classList.add('played');
            }
          });
        });
