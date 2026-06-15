@@ -186,17 +186,6 @@ function draw(){
  yl.setAttribute('transform','rotate(-90 54 220)');
  text('years',right+10,bottom+5,'label');
 
- for(let age=0; age<=100; age+=10){
-   const tx=map(age,0,100,left,right);
-   line(tx,bottom,tx,bottom+8,'tick');
-   const lbl=text(age,tx-7,bottom+26,'tickLabel');
-   if(age===100) lbl.setAttribute('x',tx-18);
- }
- for(let score=1; score<=10; score+=1){
-   const ty=map(score,1,10,bottom-20,top+20);
-   line(left-8,ty,left,ty,'tick');
-   if(score===1 || score===5 || score===10) text(score,left-30,ty+4,'tickLabel');
- }
 
  currentMovies.forEach(movie=>{
   const age=(movie.age!==undefined && movie.age!==null) ? Number(movie.age) : movie.release-birth;
@@ -212,7 +201,7 @@ function draw(){
    tooltip.style.display='block';
    tooltip.style.left=(e.clientX+12)+'px';
    tooltip.style.top=(e.clientY+12)+'px';
-   tooltip.innerHTML=`<b>${movie.title}</b><br>${movie.release} · age ${age}<br>IMDb: ${movie.score}`;
+   tooltip.innerHTML=`${movie.title}<br>${movie.release} · age ${age}<br>IMDb: ${movie.score}`;
   };
   movie.element=c;
   svg.appendChild(c);
@@ -222,7 +211,7 @@ function draw(){
 document.body.addEventListener('click',()=>tooltip.style.display='none');
 
 function freq(score){
- const min=55,max=4200;
+ const min=55,max=2200;
  const t=(clamp(score,1,10)-1)/9;
  return min*Math.pow(max/min,t);
 }
@@ -325,7 +314,7 @@ playBtn.onclick=async()=>{
 
    const years=Object.keys(groups).sort((a,b)=>Number(a)-Number(b));
 
-   const step=0.50;
+   const step=0.26;
    const visualHold=0.42;
    const leadTime=0.25;
    const startBase=audioCtx.currentTime+leadTime;
