@@ -77,16 +77,6 @@ background:transparent;
 border:1px solid #e6d300;
 color:#e6d300;
 }
-#play.playing{
-background:transparent;
-border:1px solid #e6d300;
-color:#e6d300;
-}
-#play.playing{
-background:transparent;
-border:1px solid #e6d300;
-color:#e6d300;
-}
 svg {
   position:relative;
   z-index:1;
@@ -145,7 +135,23 @@ Object.keys(actors).forEach(name=>{
 function map(v,a,b,c,d){return c+((v-a)/(b-a))*(d-c);}
 function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
 
+function stopPlayback(){
+ playToken++;
+ isPlaying=false;
+ stopScheduledAudio();
+
+ playBtn.classList.remove('playing');
+ playBtn.textContent='click to play';
+
+ currentMovies.forEach(movie=>{
+   if(movie.element) movie.element.classList.remove('active');
+ });
+}
+
 function selectActor(name){
+ if(isPlaying){
+   stopPlayback();
+ }
  current=name;
  [...nav.children].forEach(x=>x.classList.toggle('active',x.textContent===name));
  bg.textContent=name;
@@ -199,7 +205,7 @@ function draw(){
   const c=document.createElementNS(ns,'circle');
   c.setAttribute('cx',x);
   c.setAttribute('cy',y);
-  c.setAttribute('r',10);
+  c.setAttribute('r',6);
   c.setAttribute('class','point');
   c.onclick=(e)=>{
    e.stopPropagation();
@@ -221,83 +227,171 @@ function freq(score){
  return min*Math.pow(max/min,t);
 }
 
-function tone(score, startOffset=0){
+let masterGain=null;
+let compressor=null;
+let lowpass=null;
+let scheduledNodes=[];
+let playToken=0;
+
+function ensureAudioGraph(){
+ if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+
+ if(!masterGain){
+   masterGain=audioCtx.createGain();
+   masterGain.gain.value=0.55;
+
+   compressor=audioCtx.createDynamicsCompressor();
+   compressor.threshold.value=-24;
+   compressor.knee.value=24;
+   compressor.ratio.value=8;
+   compressor.attack.value=0.02;
+   compressor.release.value=0.25;
+
+   lowpass=audioCtx.createBiquadFilter();
+   lowpass.type='lowpass';
+   lowpass.frequency.value=1800;
+   lowpass.Q.value=0.7;
+
+   masterGain.connect(lowpass);
+   lowpass.connect(compressor);
+   compressor.connect(audioCtx.destination);
+ }
+}
+
+function stopScheduledAudio(){
+ scheduledNodes.forEach(node=>{
+   try{ node.stop(); }catch(e){}
+ });
+ scheduledNodes=[];
+}
+
+function toneAt(score, startTime, chordSize=1){
+ ensureAudioGraph();
+
  const osc=audioCtx.createOscillator();
  const gain=audioCtx.createGain();
+
  osc.type='sine';
  osc.frequency.value=freq(score);
- const now=audioCtx.currentTime + startOffset;
- gain.gain.setValueAtTime(0.0001,now);
- gain.gain.exponentialRampToValueAtTime(0.45,now+0.035);
- gain.gain.exponentialRampToValueAtTime(0.0001,now+0.55);
- osc.connect(gain); gain.connect(audioCtx.destination);
- osc.start(now); osc.stop(now+0.55);
+
+ const duration=0.42;
+ const attack=0.05;
+ const release=0.18;
+ const peak=0.20 / Math.sqrt(Math.max(1,chordSize));
+
+ gain.gain.setValueAtTime(0.0001,startTime);
+ gain.gain.exponentialRampToValueAtTime(peak,startTime+attack);
+ gain.gain.setValueAtTime(peak,startTime+duration-release);
+ gain.gain.exponentialRampToValueAtTime(0.0001,startTime+duration);
+
+ osc.connect(gain);
+ gain.connect(masterGain);
+
+ osc.start(startTime);
+ osc.stop(startTime+duration);
+
+ scheduledNodes.push(osc);
+ osc.onended=()=>{
+   scheduledNodes=scheduledNodes.filter(n=>n!==osc);
+ };
 }
 
 playBtn.onclick=async()=>{
  if(isPlaying) return;
- if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+
+ ensureAudioGraph();
  await audioCtx.resume();
+
+ const startedAt=performance.now();
+ while(audioCtx.state!=='running' && performance.now()-startedAt<1500){
+   await audioCtx.resume();
+   await new Promise(r=>setTimeout(r,25));
+ }
+
+ const localToken=++playToken;
  isPlaying=true;
  playBtn.classList.add('playing');
- const groups={};
- currentMovies.forEach(m=>{
-   if(!groups[m.release]) groups[m.release]=[];
-   groups[m.release].push(m);
- });
- const years=Object.keys(groups).sort((a,b)=>a-b);
- for(const year of years){
-   if(!isPlaying) break;
-   const movies=groups[year];
-   movies.forEach(m=>{m.element.classList.add('active'); tone(m.score);});
-   await new Promise(r=>setTimeout(r,150));
-   movies.forEach(m=>m.element.classList.remove('active'));
+ playBtn.textContent='playing';
+
+ try{
+   const groups={};
+
+   currentMovies.forEach(movie=>{
+     if(!groups[movie.release]){
+       groups[movie.release]=[];
+     }
+     groups[movie.release].push(movie);
+   });
+
+   const years=Object.keys(groups).sort((a,b)=>Number(a)-Number(b));
+
+   const step=0.50;
+   const visualHold=0.42;
+   const leadTime=0.25;
+   const startBase=audioCtx.currentTime+leadTime;
+
+   const events=years.map((year,index)=>({
+     year,
+     start:startBase+index*step,
+     end:startBase+index*step+visualHold,
+     movies:groups[year]
+   }));
+
+   events.forEach(event=>{
+     event.movies.forEach(movie=>{
+       toneAt(movie.score,event.start,event.movies.length);
+     });
+   });
+
+   await new Promise(resolve=>{
+     function frame(){
+       if(localToken!==playToken || !isPlaying){
+         resolve();
+         return;
+       }
+
+       const now=audioCtx.currentTime;
+
+       events.forEach(event=>{
+         const active=now>=event.start && now<event.end;
+
+         event.movies.forEach(movie=>{
+           if(movie.element){
+             movie.element.classList.toggle('active',active);
+           }
+         });
+       });
+
+       const lastEnd=events.length ? events[events.length-1].end : startBase;
+
+       if(now>lastEnd+0.1){
+         resolve();
+       }else{
+         requestAnimationFrame(frame);
+       }
+     }
+
+     requestAnimationFrame(frame);
+   });
+
+ }catch(error){
+   console.error(error);
+   alert(error.message);
+ }finally{
+   if(localToken===playToken){
+     isPlaying=false;
+     playBtn.classList.remove('playing');
+     playBtn.textContent='click to play';
+
+     currentMovies.forEach(movie=>{
+       if(movie.element) movie.element.classList.remove('active');
+     });
+   }
  }
- isPlaying=false;
- playBtn.classList.remove('playing');
 };
 
 selectActor(current);
 window.onresize=draw;
-document.getElementById('play').onclick=async()=>{
- const playBtn=document.getElementById('play');
- if(playBtn.classList.contains('playing')) return;
-
- playBtn.classList.add('playing');
- playBtn.textContent='playing';
-
- if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
- await audioCtx.resume();
-
- const groups={};
-
- currentMovies.forEach(movie=>{
-   if(!groups[movie.release]){
-      groups[movie.release]=[];
-   }
-   groups[movie.release].push(movie);
- });
-
- const years=Object.keys(groups).sort((a,b)=>a-b);
-
- for(const year of years){
-   const movies=groups[year];
-
-   movies.forEach(movie=>{
-      movie.element.classList.add('active');
-      tone(movie.score);
-   });
-
-   await new Promise(r=>setTimeout(r,300));
-
-   movies.forEach(movie=>{
-      movie.element.classList.remove('active');
-   });
- }
-
- playBtn.classList.remove('playing');
- playBtn.textContent='click to play';
-};
 </script>
 </body>
 </html>
