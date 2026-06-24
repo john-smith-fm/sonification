@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Actor Sonification</title>
+<style>
+:root {
+  --bg: #000;
+  --axis: #d4c600;
+  --point: #8f8600;
+  --point-active: #fff36a;
+  --text: #777;
+}
+* { box-sizing: border-box; }
+body {
+  margin:0;
+  background:var(--bg);
+  color:#aaa;
+  font-family:Arial,sans-serif;
+  overflow:hidden;
+}
+#nav {
+  height:100px;
+  display:flex;
+  justify-content:center;
+  gap:clamp(20px,4vw,60px);
+  align-items:center;
+  border-bottom:0px solid #333;
+  position:relative;
+  z-index:3;
+  padding:0 10px;
+  white-space:nowrap;
+}
+.actor {
+  cursor:pointer;
+  color:#555;
+  font-size:15px;
+  transition:color .5s ease;
+}
+.actor.active {
+  color:#e6d300;
+  font-weight:bold;
+}
+#bgName {
+  position:absolute;
+  left:120px;
+  bottom:120px;
+  z-index:0;
+  font-family:"Helvetica Neue UltraLight","Helvetica Neue","SF Pro Display",Arial,sans-serif;
+  font-size:clamp(150px,22vw,220px);
+  font-weight:100;
+  letter-spacing:0px;
+  line-height:.85;
+  color:rgba(255,255,255,.10);
+  pointer-events:none;
+  white-space:nowrap;
+}
+#play{
+position:absolute;
+bottom:20px;
+left:50%;
+transform:translateX(-50%);
+background:#e6d300;
+border:1px solid #e6d300;
+border-radius:999px;
+color:#000;
+font-size:20px;
+font-weight:normal;
+padding:12px 28px;
+cursor:pointer;
+letter-spacing:.02em;
+z-index:10;
+}
+#play.playing{
+background:transparent;
+border:1px solid #e6d300;
+color:#e6d300;
+}
+svg {
+  position:relative;
+  z-index:1;
+  width:100vw;
+  height:calc(100vh - 70px);
+  display:block;
+}
+.axis { stroke:var(--axis); stroke-width:1; }
+.tick { stroke:var(--axis); stroke-width:1; opacity:.7; }
+.label { fill:var(--text); font-size:16px; }
+.tickLabel { fill:#555; font-size:12px; }
+.point { fill:var(--point); opacity:.40; cursor:pointer; }
+.point.played{opacity:.80}
+.point.active{fill:#fff36a;opacity:1.00}
+#tooltip {
+  position:fixed;
+  display:none;
+  background:rgba(0,0,0,.95);
+  border:0;
+  padding:10px 12px;
+  border-radius:0;
+  color:white;
+  z-index:5;
+  max-width:260px;
+  line-height:1.35;
+  font-size:13px;
+}
+</style>
+</head>
+<body>
+<div id="nav"></div>
+<div id="tooltip"></div>
+<div id="bgName"></div>
+<svg id="svg"></svg>
+<button id="play">click to play</button>
+<script>
+const actors = {"Sophia Loren":[{"title":"Le sei mogli di Barbablù","score":5.5,"release":1950,"name":"Sophia Loren","birth":1934,"age":16},{"title":"Tototarzan","score":5.5,"release":1950,"name":"Sophia Loren","birth":1934,"age":16},{"title":"Cuori sul mare","score":5.4,"release":1950,"name":"Sophia Loren","birth":1934,"age":16},{"title":"Il voto","score":5.1,"release":1950,"name":"Sophia Loren","birth":1934,"age":16},{"title":"Quo Vadis?","score":7.2,"release":1951,"name":"Sophia Loren","birth":1934,"age":17},{"title":"Anna","score":6.7,"release":1951,"name":"Sophia Loren","birth":1934,"age":17},{"title":"Era lui, sì, sì!","score":6.3,"release":1951,"name":"Sophia Loren","birth":1934,"age":17},{"title":"Il padrone del vapore","score":5.2,"release":1951,"name":"Sophia Loren","birth":1934,"age":17},{"title":"Milano miliardaria","score":5.2,"release":1951,"name":"Sophia Loren","birth":1934,"age":17},{"title":"Io sono il capataz","score":4.7,"release":1951,"name":"Sophia Loren","birth":1934,"age":17},{"title":"Lebbra bianca","score":4.7,"release":1951,"name":"Sophia Loren","birth":1934,"age":17},{"title":"Il mago per forza","score":3.9,"release":1951,"name":"Sophia Loren","birth":1934,"age":17},{"title":"La tratta delle bianche","score":6.7,"release":1952,"name":"Sophia Loren","birth":1934,"age":18},{"title":"È arrivato l'accordatore","score":5.5,"release":1952,"name":"Sophia Loren","birth":1934,"age":18},{"title":"La favorita","score":5.2,"release":1952,"name":"Sophia Loren","birth":1934,"age":18},{"title":"Il sogno di Zorro","score":4.7,"release":1952,"name":"Sophia Loren","birth":1934,"age":18},{"title":"Ci troviamo in galleria","score":5.9,"release":1953,"name":"Sophia Loren","birth":1934,"age":19},{"title":"La domenica della buona gente","score":5.9,"release":1953,"name":"Sophia Loren","birth":1934,"age":19},{"title":"Aida","score":5.3,"release":1953,"name":"Sophia Loren","birth":1934,"age":19},{"title":"Africa sotto i mari","score":5.2,"release":1953,"name":"Sophia Loren","birth":1934,"age":19},{"title":"Miseria e nobiltà","score":7.8,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"L'oro di Napoli ","score":7.3,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"Peccato che sia una canaglia","score":6.8,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"Un giorno in pretura","score":6.6,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"La donna del fiume","score":6.3,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"Tempi nostri - Zibaldone n. 2","score":6.2,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"Carosello napoletano ","score":6.1,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"Attila","score":5.5,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"Due notti con Cleopatra","score":4.9,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"Il paese dei campanelli","score":4.9,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"Pellegrini d'amore","score":4.4,"release":1954,"name":"Sophia Loren","birth":1934,"age":20},{"title":"Il segno di Venere","score":6.7,"release":1955,"name":"Sophia Loren","birth":1934,"age":21},{"title":"Pane, amore e…","score":6.5,"release":1955,"name":"Sophia Loren","birth":1934,"age":21},{"title":"La bella mugnaia","score":6.1,"release":1955,"name":"Sophia Loren","birth":1934,"age":21},{"title":"La fortuna di essere donna","score":5.8,"release":1956,"name":"Sophia Loren","birth":1934,"age":22},{"title":"Boy on a Dolphin","score":6.2,"release":1957,"name":"Sophia Loren","birth":1934,"age":23},{"title":"Legend of the Lost","score":6.1,"release":1957,"name":"Sophia Loren","birth":1934,"age":23},{"title":"The Pride and the Passion","score":5.7,"release":1957,"name":"Sophia Loren","birth":1934,"age":23},{"title":"Houseboat","score":6.6,"release":1958,"name":"Sophia Loren","birth":1934,"age":24},{"title":"The Key","score":6.6,"release":1958,"name":"Sophia Loren","birth":1934,"age":24},{"title":"Desire Under the Elms","score":6.5,"release":1958,"name":"Sophia Loren","birth":1934,"age":24},{"title":"The Black Orchid","score":6.5,"release":1958,"name":"Sophia Loren","birth":1934,"age":24},{"title":"That Kind of Woman","score":6.3,"release":1959,"name":"Sophia Loren","birth":1934,"age":25},{"title":"La ciociara","score":7.8,"release":1960,"name":"Sophia Loren","birth":1934,"age":26},{"title":"It Started in Naples","score":6.4,"release":1960,"name":"Sophia Loren","birth":1934,"age":26},{"title":"Heller in Pink Tights","score":6,"release":1960,"name":"Sophia Loren","birth":1934,"age":26},{"title":"A Breath of Scandal","score":5.5,"release":1960,"name":"Sophia Loren","birth":1934,"age":26},{"title":"The Millionairess","score":5.5,"release":1960,"name":"Sophia Loren","birth":1934,"age":26},{"title":"El Cid","score":7.2,"release":1961,"name":"Sophia Loren","birth":1934,"age":27},{"title":"Madame Sans Gêne","score":6.2,"release":1961,"name":"Sophia Loren","birth":1934,"age":27},{"title":"Boccaccio '70","score":7.1,"release":1962,"name":"Sophia Loren","birth":1934,"age":28},{"title":"I sequestrati di Altona","score":6.8,"release":1962,"name":"Sophia Loren","birth":1934,"age":28},{"title":"Le couteau dans la plaie","score":6.3,"release":1962,"name":"Sophia Loren","birth":1934,"age":28},{"title":"Ieri oggi domani","score":7.3,"release":1963,"name":"Sophia Loren","birth":1934,"age":29},{"title":"Matrimonio all'italiana","score":7.5,"release":1964,"name":"Sophia Loren","birth":1934,"age":30},{"title":"The Fall of the Roman Empire","score":6.7,"release":1964,"name":"Sophia Loren","birth":1934,"age":30},{"title":"Operation Crossbow","score":6.6,"release":1965,"name":"Sophia Loren","birth":1934,"age":31},{"title":"Lady L","score":5.6,"release":1965,"name":"Sophia Loren","birth":1934,"age":31},{"title":"Arabesque","score":6.5,"release":1966,"name":"Sophia Loren","birth":1934,"age":32},{"title":"Judith","score":5.6,"release":1966,"name":"Sophia Loren","birth":1934,"age":32},{"title":"C'era una volta","score":6.2,"release":1967,"name":"Sophia Loren","birth":1934,"age":33},{"title":"A Countess from Hong Kong","score":6.1,"release":1967,"name":"Sophia Loren","birth":1934,"age":33},{"title":"Questi fantasmi","score":5.7,"release":1967,"name":"Sophia Loren","birth":1934,"age":33},{"title":"I girasoli","score":7.4,"release":1970,"name":"Sophia Loren","birth":1934,"age":36},{"title":"La moglie del prete","score":6.3,"release":1970,"name":"Sophia Loren","birth":1934,"age":36},{"title":"La mortadella","score":5.6,"release":1971,"name":"Sophia Loren","birth":1934,"age":37},{"title":"Man of La Mancha","score":6.6,"release":1972,"name":"Sophia Loren","birth":1934,"age":38},{"title":"Bianco rosso e…","score":5.5,"release":1972,"name":"Sophia Loren","birth":1934,"age":38},{"title":"Verdict","score":6.1,"release":1974,"name":"Sophia Loren","birth":1934,"age":40},{"title":"Il viaggio","score":6,"release":1974,"name":"Sophia Loren","birth":1934,"age":40},{"title":"Brief Encounter","score":5.2,"release":1974,"name":"Sophia Loren","birth":1934,"age":40},{"title":"La pupa del gangster","score":5.8,"release":1975,"name":"Sophia Loren","birth":1934,"age":41},{"title":"The Cassandra Crossing","score":6.4,"release":1976,"name":"Sophia Loren","birth":1934,"age":42},{"title":"Una giornata particolare","score":8.1,"release":1977,"name":"Sophia Loren","birth":1934,"age":43},{"title":"Angela","score":5.7,"release":1977,"name":"Sophia Loren","birth":1934,"age":43},{"title":"Fatto di sangue fra due uomini per causa di una vedova. Si sospettano moventi politici","score":6.6,"release":1978,"name":"Sophia Loren","birth":1934,"age":44},{"title":"Brass Target","score":5.9,"release":1978,"name":"Sophia Loren","birth":1934,"age":44},{"title":"Firepower","score":4.9,"release":1979,"name":"Sophia Loren","birth":1934,"age":45},{"title":"Sophia Loren: Her Own Story","score":6.6,"release":1980,"name":"Sophia Loren","birth":1934,"age":46},{"title":"Qualcosa di biondo","score":5.8,"release":1984,"name":"Sophia Loren","birth":1934,"age":50},{"title":"Courage","score":6.4,"release":1986,"name":"Sophia Loren","birth":1934,"age":52},{"title":"La ciociara","score":6.9,"release":1989,"name":"Sophia Loren","birth":1934,"age":55},{"title":"Sabato, domenica e lunedì","score":6.5,"release":1990,"name":"Sophia Loren","birth":1934,"age":56},{"title":"Prêt-à-Porter","score":5.1,"release":1994,"name":"Sophia Loren","birth":1934,"age":60},{"title":"Grumpier Old Men","score":6.5,"release":1995,"name":"Sophia Loren","birth":1934,"age":61},{"title":"Soleil","score":5.5,"release":1997,"name":"Sophia Loren","birth":1934,"age":63},{"title":"Francesca e Nunziata","score":6.6,"release":2001,"name":"Sophia Loren","birth":1934,"age":67},{"title":"Between Strangers","score":6.1,"release":2002,"name":"Sophia Loren","birth":1934,"age":68},{"title":"Lives of the Saints ","score":6.7,"release":2004,"name":"Sophia Loren","birth":1934,"age":70},{"title":"Peperoni ripieni e pesci in faccia","score":4.9,"release":2004,"name":"Sophia Loren","birth":1934,"age":70},{"title":"Nine","score":5.8,"release":2009,"name":"Sophia Loren","birth":1934,"age":75},{"title":"La mia casa è piena di specchi","score":6.5,"release":2010,"name":"Sophia Loren","birth":1934,"age":76},{"title":"Voce umana","score":6.4,"release":2014,"name":"Sophia Loren","birth":1934,"age":80},{"title":"The Life Ahead","score":6.8,"release":2020,"name":"Sophia Loren","birth":1934,"age":86},{"title":"Laura Pausini: Io sì (Seen)","score":6.2,"release":2020,"name":"Sophia Loren","birth":1934,"age":86},{"title":"What Would Sophia Loren Do?","score":6.6,"release":2021,"name":"Sophia Loren","birth":1934,"age":87}],"Charles Chaplin":[{"title":"His Trysting Place","score":6.3,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"The Rounders","score":6.3,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Tillie's Punctured Romance","score":6.3,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"The New Janitor","score":6.1,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Dough and Dynamite","score":6,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"His Musical Career","score":6,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"His New Profession","score":6,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"The Masquerader","score":6,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Caught in a Cabaret ","score":5.9,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Her Friend the Bandit","score":5.8,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Kid Auto Races at Venice","score":5.8,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Laughing Gas","score":5.8,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"The Knockout","score":5.8,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"The Property Man","score":5.8,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"A Film Johnnie","score":5.7,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Caught in the Rain","score":5.7,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Gentlemen of Nerve","score":5.7,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Mabel's Married Life","score":5.7,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Getting Acquainted","score":5.6,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Mabel at the Wheel","score":5.6,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Mabel's Strange Predicament","score":5.6,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Between Showers","score":5.5,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Cruel, Cruel Love","score":5.5,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Mabel's Busy Day","score":5.5,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Making a Living","score":5.5,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"The Fatal Mallet","score":5.5,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Those Love Pangs","score":5.5,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"The Star Boarder","score":5.4,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"His Prehistoric Past","score":5.3,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Tango Tangle","score":5.3,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"The Face on the Barroom Floor","score":5.2,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"His Favorite Pastime","score":5.1,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"Recreation","score":5.1,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"A Thief Catcher","score":4.9,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"A Busy Day","score":4.8,"release":1914,"name":"Charles Chaplin","birth":1889,"age":25},{"title":"The Tramp","score":7,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"The Champion","score":6.8,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"The Bank","score":6.7,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"A Night in the Show","score":6.5,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"A Woman","score":6.5,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"Shanghaied","score":6.3,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"Work","score":6.3,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"His New Job","score":6.2,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"A Burlesque on Carmen","score":6,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"A Jitney Elopement","score":6,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"A Night Out","score":6,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"By the Sea","score":5.8,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"In the Park","score":5.7,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"His Regeneration","score":4.5,"release":1915,"name":"Charles Chaplin","birth":1889,"age":26},{"title":"One A.M.","score":7.1,"release":1916,"name":"Charles Chaplin","birth":1889,"age":27},{"title":"The Pawnshop","score":7.1,"release":1916,"name":"Charles Chaplin","birth":1889,"age":27},{"title":"The Rink","score":7.1,"release":1916,"name":"Charles Chaplin","birth":1889,"age":27},{"title":"Behind the Screen","score":7,"release":1916,"name":"Charles Chaplin","birth":1889,"age":27},{"title":"The Vagabond","score":6.9,"release":1916,"name":"Charles Chaplin","birth":1889,"age":27},{"title":"The Count","score":6.7,"release":1916,"name":"Charles Chaplin","birth":1889,"age":27},{"title":"The Fireman","score":6.6,"release":1916,"name":"Charles Chaplin","birth":1889,"age":27},{"title":"The Floorwalker","score":6.6,"release":1916,"name":"Charles Chaplin","birth":1889,"age":27},{"title":"Police","score":6.5,"release":1916,"name":"Charles Chaplin","birth":1889,"age":27},{"title":"The Immigrant","score":7.7,"release":1917,"name":"Charles Chaplin","birth":1889,"age":28},{"title":"Easy Street","score":7.5,"release":1917,"name":"Charles Chaplin","birth":1889,"age":28},{"title":"The Adventurer","score":7.4,"release":1917,"name":"Charles Chaplin","birth":1889,"age":28},{"title":"The Cure","score":7.2,"release":1917,"name":"Charles Chaplin","birth":1889,"age":28},{"title":"A Dog's Life","score":7.8,"release":1918,"name":"Charles Chaplin","birth":1889,"age":29},{"title":"Shoulder Arms","score":7.3,"release":1918,"name":"Charles Chaplin","birth":1889,"age":29},{"title":"The Bond","score":5.5,"release":1918,"name":"Charles Chaplin","birth":1889,"age":29},{"title":"Triple Trouble","score":5.2,"release":1918,"name":"Charles Chaplin","birth":1889,"age":29},{"title":"A Day's Pleasure","score":6.7,"release":1919,"name":"Charles Chaplin","birth":1889,"age":30},{"title":"Sunnyside","score":6.7,"release":1919,"name":"Charles Chaplin","birth":1889,"age":30},{"title":"The Professor","score":6.1,"release":1919,"name":"Charles Chaplin","birth":1889,"age":30},{"title":"Charlie Butts In","score":5.1,"release":1920,"name":"Charles Chaplin","birth":1889,"age":31},{"title":"The Kid","score":8.3,"release":1921,"name":"Charles Chaplin","birth":1889,"age":32},{"title":"The Idle Class","score":7.4,"release":1921,"name":"Charles Chaplin","birth":1889,"age":32},{"title":"Pay Day","score":7.6,"release":1922,"name":"Charles Chaplin","birth":1889,"age":33},{"title":"Nice and Friendly","score":4.7,"release":1922,"name":"Charles Chaplin","birth":1889,"age":33},{"title":"The Pilgrim","score":7.4,"release":1923,"name":"Charles Chaplin","birth":1889,"age":34},{"title":"A Woman of Paris: A Drama of Fate","score":7,"release":1923,"name":"Charles Chaplin","birth":1889,"age":34},{"title":"Hollywood","score":6.7,"release":1923,"name":"Charles Chaplin","birth":1889,"age":34},{"title":"The Gold Rush","score":8.2,"release":1925,"name":"Charles Chaplin","birth":1889,"age":36},{"title":"Camille","score":5,"release":1926,"name":"Charles Chaplin","birth":1889,"age":37},{"title":"The Circus","score":8.2,"release":1928,"name":"Charles Chaplin","birth":1889,"age":39},{"title":"Show People","score":7.6,"release":1928,"name":"Charles Chaplin","birth":1889,"age":39},{"title":"City Lights","score":8.5,"release":1931,"name":"Charles Chaplin","birth":1889,"age":42},{"title":"Modern Times","score":8.5,"release":1936,"name":"Charles Chaplin","birth":1889,"age":47},{"title":"The Great Dictator","score":8.5,"release":1940,"name":"Charles Chaplin","birth":1889,"age":51},{"title":"Monsieur Verdoux","score":7.9,"release":1947,"name":"Charles Chaplin","birth":1889,"age":58},{"title":"Limelight","score":8.1,"release":1952,"name":"Charles Chaplin","birth":1889,"age":63},{"title":"A King in New York","score":7.1,"release":1957,"name":"Charles Chaplin","birth":1889,"age":68},{"title":"A Countess from Hong Kong","score":6.1,"release":1967,"name":"Charles Chaplin","birth":1889,"age":78}],"Meryl Streep":[{"title":"Everybody Rides the Carousel","score":5.2,"release":1976,"name":"Meryl Streep","birth":1949,"age":27},{"title":"Julia","score":7.2,"release":1977,"name":"Meryl Streep","birth":1949,"age":28},{"title":"The Deadliest Season","score":6.1,"release":1977,"name":"Meryl Streep","birth":1949,"age":28},{"title":"The Deer Hunter","score":8.1,"release":1978,"name":"Meryl Streep","birth":1949,"age":29},{"title":"Manhattan","score":7.9,"release":1979,"name":"Meryl Streep","birth":1949,"age":30},{"title":"Kramer vs. Kramer","score":7.8,"release":1979,"name":"Meryl Streep","birth":1949,"age":30},{"title":"The Seduction of Joe Tynan","score":6.1,"release":1979,"name":"Meryl Streep","birth":1949,"age":30},{"title":"The French Lieutenant's Woman","score":7,"release":1981,"name":"Meryl Streep","birth":1949,"age":32},{"title":"Sophie's Choice","score":7.6,"release":1982,"name":"Meryl Streep","birth":1949,"age":33},{"title":"Still of the Night","score":6.1,"release":1982,"name":"Meryl Streep","birth":1949,"age":33},{"title":"Alice at the Palace","score":6,"release":1982,"name":"Meryl Streep","birth":1949,"age":33},{"title":"Silkwood","score":7.2,"release":1983,"name":"Meryl Streep","birth":1949,"age":34},{"title":"Falling in Love","score":6.5,"release":1984,"name":"Meryl Streep","birth":1949,"age":35},{"title":"Out of Africa","score":7.2,"release":1985,"name":"Meryl Streep","birth":1949,"age":36},{"title":"Plenty","score":6.1,"release":1985,"name":"Meryl Streep","birth":1949,"age":36},{"title":"Heartburn","score":6.1,"release":1986,"name":"Meryl Streep","birth":1949,"age":37},{"title":"Rabbit Ears: The Tale of Peter Rabbit","score":7.2,"release":1987,"name":"Meryl Streep","birth":1949,"age":38},{"title":"Ironweed ","score":6.7,"release":1987,"name":"Meryl Streep","birth":1949,"age":38},{"title":"Rabbit Ears: The Tale of Mr. Jeremy Fisher","score":6.3,"release":1987,"name":"Meryl Streep","birth":1949,"age":38},{"title":"Evil Angels","score":6.9,"release":1988,"name":"Meryl Streep","birth":1949,"age":39},{"title":"The Tailor of Gloucester","score":5.9,"release":1988,"name":"Meryl Streep","birth":1949,"age":39},{"title":"She-Devil","score":5.6,"release":1989,"name":"Meryl Streep","birth":1949,"age":40},{"title":"Rabbit Ears: The Fisherman and His Wife","score":5.5,"release":1989,"name":"Meryl Streep","birth":1949,"age":40},{"title":"Postcards from the Edge","score":6.7,"release":1990,"name":"Meryl Streep","birth":1949,"age":41},{"title":"The Earth Day Special","score":5.9,"release":1990,"name":"Meryl Streep","birth":1949,"age":41},{"title":"Defending Your Life","score":7.2,"release":1991,"name":"Meryl Streep","birth":1949,"age":42},{"title":"Death Becomes Her","score":6.6,"release":1992,"name":"Meryl Streep","birth":1949,"age":43},{"title":"The House of the Spirits","score":6.9,"release":1993,"name":"Meryl Streep","birth":1949,"age":44},{"title":"The River Wild ","score":6.4,"release":1994,"name":"Meryl Streep","birth":1949,"age":45},{"title":"A szív hídjai","score":7.6,"release":1995,"name":"Meryl Streep","birth":1949,"age":46},{"title":"Marvin's Room","score":6.7,"release":1996,"name":"Meryl Streep","birth":1949,"age":47},{"title":"Before and After","score":6.1,"release":1996,"name":"Meryl Streep","birth":1949,"age":47},{"title":"...First Do No Harm","score":6.8,"release":1997,"name":"Meryl Streep","birth":1949,"age":48},{"title":"One True Thing","score":7,"release":1998,"name":"Meryl Streep","birth":1949,"age":49},{"title":"Dancing at Lughnasa","score":6.3,"release":1998,"name":"Meryl Streep","birth":1949,"age":49},{"title":"Music of the Heart","score":6.8,"release":1999,"name":"Meryl Streep","birth":1949,"age":50},{"title":"Chrysanthemum","score":5.8,"release":1999,"name":"Meryl Streep","birth":1949,"age":50},{"title":"Ginevra's Story: Solving the Mysteries of Leonardo da Vinci's First Known Portrait","score":3.9,"release":1999,"name":"Meryl Streep","birth":1949,"age":50},{"title":"Artificial Intelligence: AI","score":7.2,"release":2001,"name":"Meryl Streep","birth":1949,"age":52},{"title":"Adaptation.","score":7.7,"release":2002,"name":"Meryl Streep","birth":1949,"age":53},{"title":"The Hours","score":7.5,"release":2002,"name":"Meryl Streep","birth":1949,"age":53},{"title":"Stuck on You","score":5.7,"release":2003,"name":"Meryl Streep","birth":1949,"age":54},{"title":"A Series of Unfortunate Events","score":6.8,"release":2004,"name":"Meryl Streep","birth":1949,"age":55},{"title":"The Manchurian Candidate","score":6.6,"release":2004,"name":"Meryl Streep","birth":1949,"age":55},{"title":"Prime","score":6.2,"release":2005,"name":"Meryl Streep","birth":1949,"age":56},{"title":"The Devil Wears Prada","score":6.9,"release":2006,"name":"Meryl Streep","birth":1949,"age":57},{"title":"A Prairie Home Companion","score":6.7,"release":2006,"name":"Meryl Streep","birth":1949,"age":57},{"title":"The Music of Regret","score":6.1,"release":2006,"name":"Meryl Streep","birth":1949,"age":57},{"title":"The Ant Bully","score":5.8,"release":2006,"name":"Meryl Streep","birth":1949,"age":57},{"title":"Rendition","score":6.8,"release":2007,"name":"Meryl Streep","birth":1949,"age":58},{"title":"Evening","score":6.5,"release":2007,"name":"Meryl Streep","birth":1949,"age":58},{"title":"Lions for Lambs","score":6.2,"release":2007,"name":"Meryl Streep","birth":1949,"age":58},{"title":"Dark Matter","score":6,"release":2007,"name":"Meryl Streep","birth":1949,"age":58},{"title":"Doubt","score":7.5,"release":2008,"name":"Meryl Streep","birth":1949,"age":59},{"title":"Mamma Mia!","score":6.4,"release":2008,"name":"Meryl Streep","birth":1949,"age":59},{"title":"Fantastic Mr. Fox","score":7.8,"release":2009,"name":"Meryl Streep","birth":1949,"age":60},{"title":"Julie & Julia","score":7,"release":2009,"name":"Meryl Streep","birth":1949,"age":60},{"title":"It's Complicated","score":6.5,"release":2009,"name":"Meryl Streep","birth":1949,"age":60},{"title":"Higglety Pigglety Pop!","score":6.3,"release":2010,"name":"Meryl Streep","birth":1949,"age":61},{"title":"The Iron Lady","score":6.4,"release":2011,"name":"Meryl Streep","birth":1949,"age":62},{"title":"Hope Springs","score":6.3,"release":2012,"name":"Meryl Streep","birth":1949,"age":63},{"title":"August: Osage County","score":7.2,"release":2013,"name":"Meryl Streep","birth":1949,"age":64},{"title":"The Homesman","score":6.6,"release":2014,"name":"Meryl Streep","birth":1949,"age":65},{"title":"The Giver","score":6.5,"release":2014,"name":"Meryl Streep","birth":1949,"age":65},{"title":"Into the Woods","score":5.9,"release":2014,"name":"Meryl Streep","birth":1949,"age":65},{"title":"Suffragette","score":6.9,"release":2015,"name":"Meryl Streep","birth":1949,"age":66},{"title":"Ricki and the Flash","score":5.9,"release":2015,"name":"Meryl Streep","birth":1949,"age":66},{"title":"Florence Foster Jenkins","score":6.8,"release":2016,"name":"Meryl Streep","birth":1949,"age":67},{"title":"Xiao men shen","score":5.5,"release":2016,"name":"Meryl Streep","birth":1949,"age":67},{"title":"The Post","score":7.2,"release":2017,"name":"Meryl Streep","birth":1949,"age":68},{"title":"Mary Poppins Returns","score":6.8,"release":2018,"name":"Meryl Streep","birth":1949,"age":69},{"title":"Mamma Mia! Here We Go Again","score":6.7,"release":2018,"name":"Meryl Streep","birth":1949,"age":69},{"title":"The Laundromat","score":6.3,"release":2019,"name":"Meryl Streep","birth":1949,"age":70},{"title":"Here We Are: Notes for Living on Planet Earth","score":7.3,"release":2020,"name":"Meryl Streep","birth":1949,"age":71},{"title":"Let Them All Talk","score":6.1,"release":2020,"name":"Meryl Streep","birth":1949,"age":71},{"title":"The Prom","score":5.9,"release":2020,"name":"Meryl Streep","birth":1949,"age":71},{"title":"Don't Look Up","score":7.1,"release":2021,"name":"Meryl Streep","birth":1949,"age":72},{"title":"The U.S. and the Holocaust","score":8.7,"release":2022,"name":"Meryl Streep","birth":1949,"age":73},{"title":"Only Murders in the Building","score":8.0,"release":2023,"name":"Meryl Streep","birth":1949,"age":74},{"title":"Extrapolations","score":6.2,"release":2023,"name":"Meryl Streep","birth":1949,"age":74}],"Uma Thurman":[{"title":"Nausicaä of the Valley of the Wind","score":8.1,"release":1984,"name":"Uma Thurman","birth":1970,"age":14},{"title":"Kiss Daddy Goodnight","score":3.9,"release":1987,"name":"Uma Thurman","birth":1970,"age":17},{"title":"Dangerous Liaisons","score":7.6,"release":1988,"name":"Uma Thurman","birth":1970,"age":18},{"title":"The Adventures of Baron Munchausen","score":7.2,"release":1988,"name":"Uma Thurman","birth":1970,"age":18},{"title":"Johnny Be Good","score":4.6,"release":1988,"name":"Uma Thurman","birth":1970,"age":18},{"title":"Henry & June","score":6.3,"release":1990,"name":"Uma Thurman","birth":1970,"age":20},{"title":"Where the Heart Is","score":6,"release":1990,"name":"Uma Thurman","birth":1970,"age":20},{"title":"Robin Hood","score":5.8,"release":1991,"name":"Uma Thurman","birth":1970,"age":21},{"title":"Dylan Thomas","score":4.8,"release":1991,"name":"Uma Thurman","birth":1970,"age":21},{"title":"Jennifer 8","score":6.3,"release":1992,"name":"Uma Thurman","birth":1970,"age":22},{"title":"Final Analysis","score":5.9,"release":1992,"name":"Uma Thurman","birth":1970,"age":22},{"title":"Mad Dog and Glory","score":6.2,"release":1993,"name":"Uma Thurman","birth":1970,"age":23},{"title":"K.D.Lang: Just Keep Me Moving","score":5.4,"release":1993,"name":"Uma Thurman","birth":1970,"age":23},{"title":"Even Cowgirls Get the Blues","score":4.4,"release":1993,"name":"Uma Thurman","birth":1970,"age":23},{"title":"Pulp Fiction","score":8.9,"release":1994,"name":"Uma Thurman","birth":1970,"age":24},{"title":"A Month by the Lake","score":6.2,"release":1995,"name":"Uma Thurman","birth":1970,"age":25},{"title":"Beautiful Girls","score":7.1,"release":1996,"name":"Uma Thurman","birth":1970,"age":26},{"title":"Four Tales of Two Cities","score":6.3,"release":1996,"name":"Uma Thurman","birth":1970,"age":26},{"title":"The Truth About Cats & Dogs","score":6.2,"release":1996,"name":"Uma Thurman","birth":1970,"age":26},{"title":"Gattaca","score":7.8,"release":1997,"name":"Uma Thurman","birth":1970,"age":27},{"title":"Batman & Robin","score":3.7,"release":1997,"name":"Uma Thurman","birth":1970,"age":27},{"title":"Les Misérables","score":7.5,"release":1998,"name":"Uma Thurman","birth":1970,"age":28},{"title":"The Avengers","score":3.8,"release":1998,"name":"Uma Thurman","birth":1970,"age":28},{"title":"Sweet and Lowdown","score":7.2,"release":1999,"name":"Uma Thurman","birth":1970,"age":29},{"title":"Vatel","score":6.6,"release":2000,"name":"Uma Thurman","birth":1970,"age":30},{"title":"The Golden Bowl","score":5.9,"release":2000,"name":"Uma Thurman","birth":1970,"age":30},{"title":"Tape","score":7.3,"release":2001,"name":"Uma Thurman","birth":1970,"age":31},{"title":"Chelsea Walls","score":5.1,"release":2001,"name":"Uma Thurman","birth":1970,"age":31},{"title":"Hysterical Blindness","score":6.4,"release":2002,"name":"Uma Thurman","birth":1970,"age":32},{"title":"Kill Bill: Vol. 1","score":8.1,"release":2003,"name":"Uma Thurman","birth":1970,"age":33},{"title":"Paycheck","score":6.3,"release":2003,"name":"Uma Thurman","birth":1970,"age":33},{"title":"Kill Bill: Vol. 2","score":8,"release":2004,"name":"Uma Thurman","birth":1970,"age":34},{"title":"The Producers","score":6.3,"release":2005,"name":"Uma Thurman","birth":1970,"age":35},{"title":"Prime","score":6.2,"release":2005,"name":"Uma Thurman","birth":1970,"age":35},{"title":"Be Cool","score":5.6,"release":2005,"name":"Uma Thurman","birth":1970,"age":35},{"title":"The Naked Brothers Band: The Movie","score":3.8,"release":2005,"name":"Uma Thurman","birth":1970,"age":35},{"title":"My Super Ex-Girlfriend","score":5.1,"release":2006,"name":"Uma Thurman","birth":1970,"age":36},{"title":"The Life Before Her Eyes","score":6.4,"release":2007,"name":"Uma Thurman","birth":1970,"age":37},{"title":"Mission Zero","score":5,"release":2007,"name":"Uma Thurman","birth":1970,"age":37},{"title":"A Muppets Christmas: Letters to Santa","score":6.6,"release":2008,"name":"Uma Thurman","birth":1970,"age":38},{"title":"The Accidental Husband","score":5.6,"release":2008,"name":"Uma Thurman","birth":1970,"age":38},{"title":"My Zinc Bed","score":5.5,"release":2008,"name":"Uma Thurman","birth":1970,"age":38},{"title":"Motherhood","score":4.6,"release":2009,"name":"Uma Thurman","birth":1970,"age":39},{"title":"Percy Jackson & the Olympians: The Lightning Thief ","score":5.9,"release":2010,"name":"Uma Thurman","birth":1970,"age":40},{"title":"Ceremony","score":5.5,"release":2010,"name":"Uma Thurman","birth":1970,"age":40},{"title":"Kill Bill: The Whole Bloody Affair","score":8.8,"release":2011,"name":"Uma Thurman","birth":1970,"age":41},{"title":"Playing for Keeps","score":5.7,"release":2012,"name":"Uma Thurman","birth":1970,"age":42},{"title":"Bel Ami","score":5.3,"release":2012,"name":"Uma Thurman","birth":1970,"age":42},{"title":"Nymphomaniac: Vol. I ","score":6.9,"release":2013,"name":"Uma Thurman","birth":1970,"age":43},{"title":"Nymphomaniac: Vol. II","score":6.7,"release":2013,"name":"Uma Thurman","birth":1970,"age":43},{"title":"Movie 43","score":4.3,"release":2013,"name":"Uma Thurman","birth":1970,"age":43},{"title":"Jump! ","score":6.8,"release":2014,"name":"Uma Thurman","birth":1970,"age":44},{"title":"The Gift","score":6.7,"release":2014,"name":"Uma Thurman","birth":1970,"age":44},{"title":"The Mundane Goddess","score":6.2,"release":2014,"name":"Uma Thurman","birth":1970,"age":44},{"title":"Burnt","score":6.6,"release":2015,"name":"Uma Thurman","birth":1970,"age":45},{"title":"The House That Jack Built","score":6.8,"release":2018,"name":"Uma Thurman","birth":1970,"age":48},{"title":"Down a Dark Hall","score":5.1,"release":2018,"name":"Uma Thurman","birth":1970,"age":48},{"title":"The Con Is On","score":4.7,"release":2018,"name":"Uma Thurman","birth":1970,"age":48},{"title":"The Age of Nature","score":7.7,"release":2020,"name":"Uma Thurman","birth":1970,"age":50},{"title":"The War with Grandpa","score":5.7,"release":2020,"name":"Uma Thurman","birth":1970,"age":50},{"title":"Super Pumped","score":7.3,"release":2022,"name":"Uma Thurman","birth":1970,"age":52},{"title":"Suspicion","score":6.2,"release":2022,"name":"Uma Thurman","birth":1970,"age":52},{"title":"Hollywood Stargirl","score":5.8,"release":2022,"name":"Uma Thurman","birth":1970,"age":52},{"title":"Red, White & Royal Blue","score":7.0,"release":2023,"name":"Uma Thurman","birth":1970,"age":53},{"title":"The Kill Room","score":5.5,"release":2023,"name":"Uma Thurman","birth":1970,"age":53},{"title":"The Old Guard 2","score":5.1,"release":2025,"name":"Uma Thurman","birth":1970,"age":55}],"Tim Robbins":[{"title":"Quarterback Princess","score":6.4,"release":1983,"name":"Tim Robbins","birth":1958,"age":25},{"title":"No Small Affair","score":5.5,"release":1984,"name":"Tim Robbins","birth":1958,"age":26},{"title":"Toy Soldiers","score":5,"release":1984,"name":"Tim Robbins","birth":1958,"age":26},{"title":"The Sure Thing","score":7,"release":1985,"name":"Tim Robbins","birth":1958,"age":27},{"title":"Fraternity Vacation","score":5.2,"release":1985,"name":"Tim Robbins","birth":1958,"age":27},{"title":"Top Gun","score":6.9,"release":1986,"name":"Tim Robbins","birth":1958,"age":28},{"title":"Howard the Duck","score":4.7,"release":1986,"name":"Tim Robbins","birth":1958,"age":28},{"title":"Five Corners","score":6.2,"release":1987,"name":"Tim Robbins","birth":1958,"age":29},{"title":"Bull Durham","score":7.1,"release":1988,"name":"Tim Robbins","birth":1958,"age":30},{"title":"Tapeheads","score":5.7,"release":1988,"name":"Tim Robbins","birth":1958,"age":30},{"title":"Erik the Viking","score":6.3,"release":1989,"name":"Tim Robbins","birth":1958,"age":31},{"title":"Miss Firecracker","score":6,"release":1989,"name":"Tim Robbins","birth":1958,"age":31},{"title":"Twister","score":5.2,"release":1989,"name":"Tim Robbins","birth":1958,"age":31},{"title":"Jacob's Ladder","score":7.5,"release":1990,"name":"Tim Robbins","birth":1958,"age":32},{"title":"Cadillac Man","score":5.7,"release":1990,"name":"Tim Robbins","birth":1958,"age":32},{"title":"Jungle Fever","score":6.5,"release":1991,"name":"Tim Robbins","birth":1958,"age":33},{"title":"The Player ","score":7.5,"release":1992,"name":"Tim Robbins","birth":1958,"age":34},{"title":"Bob Roberts","score":7,"release":1992,"name":"Tim Robbins","birth":1958,"age":34},{"title":"Short Cuts","score":7.7,"release":1993,"name":"Tim Robbins","birth":1958,"age":35},{"title":"The Shawshank Redemption","score":9.3,"release":1994,"name":"Tim Robbins","birth":1958,"age":36},{"title":"The Hudsucker Proxy","score":7.2,"release":1994,"name":"Tim Robbins","birth":1958,"age":36},{"title":"I.Q.","score":6.2,"release":1994,"name":"Tim Robbins","birth":1958,"age":36},{"title":"Ready to Wear","score":5.1,"release":1994,"name":"Tim Robbins","birth":1958,"age":36},{"title":"Nothing to Lose","score":6.7,"release":1997,"name":"Tim Robbins","birth":1958,"age":39},{"title":"Arlington Road","score":7.2,"release":1999,"name":"Tim Robbins","birth":1958,"age":41},{"title":"Cradle Will Rock","score":6.8,"release":1999,"name":"Tim Robbins","birth":1958,"age":41},{"title":"Austin Powers: The Spy Who Shagged Me","score":6.6,"release":1999,"name":"Tim Robbins","birth":1958,"age":41},{"title":"High Fidelity","score":7.5,"release":2000,"name":"Tim Robbins","birth":1958,"age":42},{"title":"Mission to Mars","score":5.7,"release":2000,"name":"Tim Robbins","birth":1958,"age":42},{"title":"Human Nature","score":6.4,"release":2001,"name":"Tim Robbins","birth":1958,"age":43},{"title":"Antitrust","score":6.1,"release":2001,"name":"Tim Robbins","birth":1958,"age":43},{"title":"The Truth About Charlie ","score":4.7,"release":2002,"name":"Tim Robbins","birth":1958,"age":44},{"title":"Mystic River","score":7.9,"release":2003,"name":"Tim Robbins","birth":1958,"age":45},{"title":"Code 46","score":6.2,"release":2003,"name":"Tim Robbins","birth":1958,"age":45},{"title":"Anchorman: The Legend of Ron Burgundy","score":7.2,"release":2004,"name":"Tim Robbins","birth":1958,"age":46},{"title":"The Secret Life of Words","score":7.5,"release":2005,"name":"Tim Robbins","birth":1958,"age":47},{"title":"War of the Worlds","score":6.5,"release":2005,"name":"Tim Robbins","birth":1958,"age":47},{"title":"Embedded","score":6.3,"release":2005,"name":"Tim Robbins","birth":1958,"age":47},{"title":"Zathura: A Space Adventure","score":6.1,"release":2005,"name":"Tim Robbins","birth":1958,"age":47},{"title":"Tenacious D in The Pick of Destiny","score":6.8,"release":2006,"name":"Tim Robbins","birth":1958,"age":48},{"title":"Catch a Fire ","score":6.7,"release":2006,"name":"Tim Robbins","birth":1958,"age":48},{"title":"Noise","score":6.2,"release":2007,"name":"Tim Robbins","birth":1958,"age":49},{"title":"Behind the Director's Son's Cut","score":6.1,"release":2007,"name":"Tim Robbins","birth":1958,"age":49},{"title":"The Lucky Ones","score":6.9,"release":2008,"name":"Tim Robbins","birth":1958,"age":50},{"title":"City of Ember","score":6.5,"release":2008,"name":"Tim Robbins","birth":1958,"age":50},{"title":"Cinema Verite","score":6.5,"release":2011,"name":"Tim Robbins","birth":1958,"age":53},{"title":"Green Lantern","score":5.5,"release":2011,"name":"Tim Robbins","birth":1958,"age":53},{"title":"Back to 1942","score":6.9,"release":2012,"name":"Tim Robbins","birth":1958,"age":54},{"title":"Thanks for Sharing","score":6.4,"release":2012,"name":"Tim Robbins","birth":1958,"age":54},{"title":"Life of Crime","score":5.8,"release":2013,"name":"Tim Robbins","birth":1958,"age":55},{"title":"Welcome to Me","score":5.9,"release":2014,"name":"Tim Robbins","birth":1958,"age":56},{"title":"A Perfect Day","score":6.8,"release":2015,"name":"Tim Robbins","birth":1958,"age":57},{"title":"Marjorie Prime","score":6.3,"release":2017,"name":"Tim Robbins","birth":1958,"age":59},{"title":"Silo","score":8.1,"release":2023,"name":"Tim Robbins","birth":1958,"age":65},{"title":"The Luckiest Man in America","score":6.7,"release":2024,"name":"Tim Robbins","birth":1958,"age":66}],"Adam Sandler":[{"title":"Going Overboard","score":1.8,"release":1989,"name":"Adam Sandler","birth":1966,"age":23},{"title":"Shakes the Clown","score":5.6,"release":1991,"name":"Adam Sandler","birth":1966,"age":25},{"title":"Coneheads","score":5.3,"release":1993,"name":"Adam Sandler","birth":1966,"age":27},{"title":"Airheads","score":6.1,"release":1994,"name":"Adam Sandler","birth":1966,"age":28},{"title":"Mixed Nuts","score":5.5,"release":1994,"name":"Adam Sandler","birth":1966,"age":28},{"title":"Billy Madison","score":6.4,"release":1995,"name":"Adam Sandler","birth":1966,"age":29},{"title":"Adam Sandler: Steve Polychronopolous","score":5.2,"release":1996,"name":"Adam Sandler","birth":1966,"age":30},{"title":"Bulletproof","score":5.8,"release":1996,"name":"Adam Sandler","birth":1966,"age":30},{"title":"Happy Gilmore","score":7,"release":1996,"name":"Adam Sandler","birth":1966,"age":30},{"title":"Dirty Work","score":6.4,"release":1998,"name":"Adam Sandler","birth":1966,"age":32},{"title":"The Waterboy","score":6.1,"release":1998,"name":"Adam Sandler","birth":1966,"age":32},{"title":"The Wedding Singer","score":6.8,"release":1998,"name":"Adam Sandler","birth":1966,"age":32},{"title":"Big Daddy","score":6.4,"release":1999,"name":"Adam Sandler","birth":1966,"age":33},{"title":"Deuce Bigalow: Male Gigolo","score":5.7,"release":1999,"name":"Adam Sandler","birth":1966,"age":33},{"title":"The Peeper","score":4.9,"release":1999,"name":"Adam Sandler","birth":1966,"age":33},{"title":"Little Nicky","score":5.3,"release":2000,"name":"Adam Sandler","birth":1966,"age":34},{"title":"The Animal","score":4.8,"release":2001,"name":"Adam Sandler","birth":1966,"age":35},{"title":"A Day with the Meatball","score":5.3,"release":2002,"name":"Adam Sandler","birth":1966,"age":36},{"title":"Eight Crazy Nights","score":5.4,"release":2002,"name":"Adam Sandler","birth":1966,"age":36},{"title":"Mr. Deeds","score":5.8,"release":2002,"name":"Adam Sandler","birth":1966,"age":36},{"title":"Punch-Drunk Love","score":7.3,"release":2002,"name":"Adam Sandler","birth":1966,"age":36},{"title":"The Hot Chick ","score":5.5,"release":2002,"name":"Adam Sandler","birth":1966,"age":36},{"title":"Anger Management ","score":6.2,"release":2003,"name":"Adam Sandler","birth":1966,"age":37},{"title":"Blossoms & Blood","score":6.3,"release":2003,"name":"Adam Sandler","birth":1966,"age":37},{"title":"Couch","score":4.4,"release":2003,"name":"Adam Sandler","birth":1966,"age":37},{"title":"Punch-Drunk Love: 12 Scopitones","score":6.5,"release":2003,"name":"Adam Sandler","birth":1966,"age":37},{"title":"50 First Dates","score":6.8,"release":2004,"name":"Adam Sandler","birth":1966,"age":38},{"title":"Spanglish","score":6.4,"release":2004,"name":"Adam Sandler","birth":1966,"age":38},{"title":"Deuce Bigalow: European Gigolo","score":4.7,"release":2005,"name":"Adam Sandler","birth":1966,"age":39},{"title":"The Longest Yard","score":6.4,"release":2005,"name":"Adam Sandler","birth":1966,"age":39},{"title":"The Longest Yard: Deleted Scenes","score":6.7,"release":2005,"name":"Adam Sandler","birth":1966,"age":39},{"title":"Click","score":6.4,"release":2006,"name":"Adam Sandler","birth":1966,"age":40},{"title":"I Now Pronounce You Chuck & Larry","score":5.9,"release":2007,"name":"Adam Sandler","birth":1966,"age":41},{"title":"Reign Over Me","score":7.4,"release":2007,"name":"Adam Sandler","birth":1966,"age":41},{"title":"Bedtime Stories","score":6,"release":2008,"name":"Adam Sandler","birth":1966,"age":42},{"title":"You Don't Mess with the Zohan","score":5.5,"release":2008,"name":"Adam Sandler","birth":1966,"age":42},{"title":"Funny People","score":6.3,"release":2009,"name":"Adam Sandler","birth":1966,"age":43},{"title":"Grown Ups","score":5.9,"release":2010,"name":"Adam Sandler","birth":1966,"age":44},{"title":"Jack and Jill","score":3.3,"release":2011,"name":"Adam Sandler","birth":1966,"age":45},{"title":"Just Go with It","score":6.4,"release":2011,"name":"Adam Sandler","birth":1966,"age":45},{"title":"Zookeeper","score":5.2,"release":2011,"name":"Adam Sandler","birth":1966,"age":45},{"title":"Hotel Transylvania","score":7.1,"release":2012,"name":"Adam Sandler","birth":1966,"age":46},{"title":"That's My Boy","score":5.5,"release":2012,"name":"Adam Sandler","birth":1966,"age":46},{"title":"Grown Ups 2","score":5.4,"release":2013,"name":"Adam Sandler","birth":1966,"age":47},{"title":"Blended","score":6.4,"release":2014,"name":"Adam Sandler","birth":1966,"age":48},{"title":"Top Five","score":6.4,"release":2014,"name":"Adam Sandler","birth":1966,"age":48},{"title":"Hotel Transylvania 2","score":6.7,"release":2015,"name":"Adam Sandler","birth":1966,"age":49},{"title":"Pixels","score":5.6,"release":2015,"name":"Adam Sandler","birth":1966,"age":49},{"title":"The Ridiculous 6","score":4.8,"release":2015,"name":"Adam Sandler","birth":1966,"age":49},{"title":"Puppy!: A Hotel Transylvania Short ","score":6.1,"release":2017,"name":"Adam Sandler","birth":1966,"age":51},{"title":"Sandy Wexler","score":5.1,"release":2017,"name":"Adam Sandler","birth":1966,"age":51},{"title":"The Meyerowitz Stories","score":6.9,"release":2017,"name":"Adam Sandler","birth":1966,"age":51},{"title":"Hotel Transylvania 3: Summer Vacation","score":6.3,"release":2018,"name":"Adam Sandler","birth":1966,"age":52},{"title":"The Week Of","score":5.1,"release":2018,"name":"Adam Sandler","birth":1966,"age":52},{"title":"Murder Mystery","score":6,"release":2019,"name":"Adam Sandler","birth":1966,"age":53},{"title":"Uncut Gems","score":8.1,"release":2019,"name":"Adam Sandler","birth":1966,"age":53},{"title":"Hubie Halloween","score":5.3,"release":2020,"name":"Adam Sandler","birth":1966,"age":54},{"title":"Hustle","score":7.3,"release":2022,"name":"Adam Sandler","birth":1966,"age":56},{"title":"Leo","score":7.0,"release":2023,"name":"Adam Sandler","birth":1966,"age":57},{"title":"Murder Mystery 2","score":5.7,"release":2023,"name":"Adam Sandler","birth":1966,"age":57},{"title":"You Are So Not Invited to My Bat Mitzvah","score":5.9,"release":2023,"name":"Adam Sandler","birth":1966,"age":57},{"title":"Adam Sandler: Love You","score":6.7,"release":2024,"name":"Adam Sandler","birth":1966,"age":58},{"title":"Spaceman","score":5.7,"release":2024,"name":"Adam Sandler","birth":1966,"age":58},{"title":"Happy Gilmore 2","score":6.1,"release":2025,"name":"Adam Sandler","birth":1966,"age":59},{"title":"Jay Kelly","score":6.5,"release":2025,"name":"Adam Sandler","birth":1966,"age":59}]};
+
+const nav=document.getElementById('nav');
+const svg=document.getElementById('svg');
+const bg=document.getElementById('bgName');
+const tooltip=document.getElementById('tooltip');
+const playBtn=document.getElementById('play');
+let current=Object.keys(actors)[0];
+let currentMovies=[];
+let audioCtx=null;
+let isPlaying=false;
+
+Object.keys(actors).forEach(name=>{
+ const d=document.createElement('div');
+ d.className='actor';
+ d.textContent=name;
+ d.onclick=()=>selectActor(name);
+ nav.appendChild(d);
+});
+
+function map(v,a,b,c,d){return c+((v-a)/(b-a))*(d-c);}
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+
+function fitBgName(left,right){
+ const axisWidth=right-left;
+ bg.style.left=left+'px';
+ bg.style.width=axisWidth+'px';
+ bg.style.transform='none';
+ bg.style.fontSize='220px';
+ bg.style.letterSpacing='0px';
+
+ requestAnimationFrame(()=>{
+   let size=220;
+   const minSize=70;
+
+   bg.style.fontSize=size+'px';
+   bg.style.letterSpacing='0px';
+
+   while(bg.scrollWidth>axisWidth && size>minSize){
+     size-=2;
+     bg.style.fontSize=size+'px';
+   }
+
+   const chars=bg.textContent.length;
+   const naturalWidth=bg.scrollWidth;
+
+   if(chars>1 && naturalWidth<axisWidth){
+     const extraSpace=(axisWidth-naturalWidth)/(chars-1);
+     bg.style.letterSpacing=extraSpace+'px';
+   }
+ });
+}
+
+function stopPlayback(){
+ playToken++;
+ isPlaying=false;
+ stopScheduledAudio();
+
+ playBtn.classList.remove('playing');
+ playBtn.textContent='click to play';
+
+ currentMovies.forEach(movie=>{
+   if(movie.element){
+     movie.element.classList.remove('active');
+     movie.element.classList.remove('played');
+   }
+ });
+}
+
+function selectActor(name){
+ if(isPlaying){
+   stopPlayback();
+ }
+ current=name;
+ [...nav.children].forEach(x=>x.classList.toggle('active',x.textContent===name));
+ bg.textContent=name;
+ draw();
+}
+
+function draw(){
+ svg.innerHTML='';
+ tooltip.style.display='none';
+ const w=window.innerWidth;
+ const h=window.innerHeight-70;
+ currentMovies=actors[current].slice().sort((a,b)=>a.release-b.release || b.score-a.score);
+ if(!currentMovies.length) return;
+ const birth=currentMovies[0].birth;
+ const left=120,right=w-120,top=25,bottom=h-120;
+ fitBgName(left,right);
+ const ns='http://www.w3.org/2000/svg';
+ function line(x1,y1,x2,y2,cls='axis'){
+  const l=document.createElementNS(ns,'line');
+  l.setAttribute('x1',x1); l.setAttribute('y1',y1);
+  l.setAttribute('x2',x2); l.setAttribute('y2',y2);
+  l.setAttribute('class',cls); svg.appendChild(l); return l;
+ }
+ function text(content,x,y,cls='label'){
+  const t=document.createElementNS(ns,'text');
+  t.textContent=content; t.setAttribute('x',x); t.setAttribute('y',y);
+  t.setAttribute('class',cls); svg.appendChild(t); return t;
+ }
+ line(left,bottom,right,bottom);
+
+ const axisTop=top+20;
+ const axisLabelGap=96;
+ const axisLabelTop=axisTop+30;
+ const axisLabelBottom=axisLabelTop+axisLabelGap;
+ const ylX=left;
+ const ylY=(axisLabelTop+axisLabelBottom)/2;
+
+ // Függőleges tengely megszakítva az "IMDb score" felirat mögött:
+ // felül 30 px sárga szakasz, majd a felirat alatt folytatódik a tengely.
+ line(left,axisTop,left,axisLabelTop);
+ line(left,axisLabelBottom,left,bottom);
+
+ const yl=text('IMDb score',ylX,ylY,'label');
+ yl.setAttribute('text-anchor','middle');
+ yl.setAttribute('dominant-baseline','middle');
+ yl.setAttribute('transform',`rotate(-90 ${ylX} ${ylY})`);
+ text('years',right+10,bottom+5,'label');
+
+
+ currentMovies.forEach(movie=>{
+  const age=(movie.age!==undefined && movie.age!==null) ? Number(movie.age) : movie.release-birth;
+  const x=map(clamp(age,0,100),0,100,left+20,right-20);
+  const y=map(clamp(Number(movie.score),1,10),1,10,bottom-20,top+20);
+  const c=document.createElementNS(ns,'circle');
+  c.setAttribute('cx',x);
+  c.setAttribute('cy',y);
+  c.setAttribute('r',6);
+  c.setAttribute('class','point');
+  movie.played=false;
+  c.onclick=(e)=>{
+   e.stopPropagation();
+   tooltip.style.display='block';
+   tooltip.style.left=(e.clientX+12)+'px';
+   tooltip.style.top=(e.clientY+12)+'px';
+   tooltip.innerHTML=`${movie.title}<br>${movie.release} · age ${age}<br>IMDb: ${movie.score}`;
+  };
+  movie.element=c;
+  svg.appendChild(c);
+ });
+}
+
+document.body.addEventListener('click',()=>tooltip.style.display='none');
+
+function freq(score){
+ const min=55,max=2200;
+ const t=(clamp(score,1,10)-1)/9;
+ return min*Math.pow(max/min,t);
+}
+
+let masterGain=null;
+let compressor=null;
+let lowpass=null;
+let scheduledNodes=[];
+let playToken=0;
+
+function ensureAudioGraph(){
+ if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+
+ if(!masterGain){
+   masterGain=audioCtx.createGain();
+   masterGain.gain.value=0.55;
+
+   compressor=audioCtx.createDynamicsCompressor();
+   compressor.threshold.value=-24;
+   compressor.knee.value=24;
+   compressor.ratio.value=8;
+   compressor.attack.value=0.02;
+   compressor.release.value=0.25;
+
+   lowpass=audioCtx.createBiquadFilter();
+   lowpass.type='lowpass';
+   lowpass.frequency.value=1800;
+   lowpass.Q.value=0.7;
+
+   masterGain.connect(lowpass);
+   lowpass.connect(compressor);
+   compressor.connect(audioCtx.destination);
+ }
+}
+
+function stopScheduledAudio(){
+ scheduledNodes.forEach(node=>{
+   try{ node.stop(); }catch(e){}
+ });
+ scheduledNodes=[];
+}
+
+function toneAt(score, startTime, chordSize=1){
+ ensureAudioGraph();
+
+ const osc=audioCtx.createOscillator();
+ const gain=audioCtx.createGain();
+
+ osc.type='sine';
+ osc.frequency.value=freq(score);
+
+ const duration=0.42;
+ const attack=0.05;
+ const release=0.18;
+ const peak=0.20 / Math.sqrt(Math.max(1,chordSize));
+
+ gain.gain.setValueAtTime(0.0001,startTime);
+ gain.gain.exponentialRampToValueAtTime(peak,startTime+attack);
+ gain.gain.setValueAtTime(peak,startTime+duration-release);
+ gain.gain.exponentialRampToValueAtTime(0.0001,startTime+duration);
+
+ osc.connect(gain);
+ gain.connect(masterGain);
+
+ osc.start(startTime);
+ osc.stop(startTime+duration);
+
+ scheduledNodes.push(osc);
+ osc.onended=()=>{
+   scheduledNodes=scheduledNodes.filter(n=>n!==osc);
+ };
+}
+
+playBtn.onclick=async()=>{
+ if(isPlaying) return;
+
+ ensureAudioGraph();
+ await audioCtx.resume();
+
+ const startedAt=performance.now();
+ while(audioCtx.state!=='running' && performance.now()-startedAt<1500){
+   await audioCtx.resume();
+   await new Promise(r=>setTimeout(r,25));
+ }
+
+ const localToken=++playToken;
+ isPlaying=true;
+ currentMovies.forEach(movie=>{
+   movie.played=false;
+
+   if(movie.element){
+     movie.element.classList.remove('played');
+     movie.element.classList.remove('active');
+   }
+ });
+ playBtn.classList.add('playing');
+ playBtn.textContent='playing';
+
+ try{
+   const groups={};
+
+   currentMovies.forEach(movie=>{
+     if(!groups[movie.release]){
+       groups[movie.release]=[];
+     }
+     groups[movie.release].push(movie);
+   });
+
+   const years=Object.keys(groups).sort((a,b)=>Number(a)-Number(b));
+
+   const step=0.30;
+   const visualHold=0.42;
+   const leadTime=0.25;
+   const startBase=audioCtx.currentTime+leadTime;
+
+   const events=years.map((year,index)=>({
+     year,
+     start:startBase+index*step,
+     end:startBase+index*step+visualHold,
+     movies:groups[year]
+   }));
+
+   events.forEach(event=>{
+     event.movies.forEach(movie=>{
+       toneAt(movie.score,event.start,event.movies.length);
+     });
+   });
+
+   await new Promise(resolve=>{
+     function frame(){
+       if(localToken!==playToken || !isPlaying){
+         resolve();
+         return;
+       }
+
+       const now=audioCtx.currentTime;
+
+       events.forEach(event=>{
+         const active=now>=event.start && now<event.end;
+
+         event.movies.forEach(movie=>{
+           if(!movie.element) return;
+
+           movie.element.classList.toggle('active',active);
+
+           if(now>=event.end){
+             movie.played=true;
+             movie.element.classList.add('played');
+           }
+         });
+       });
+
+       const lastEnd=events.length ? events[events.length-1].end : startBase;
+
+       if(now>lastEnd+0.1){
+         resolve();
+       }else{
+         requestAnimationFrame(frame);
+       }
+     }
+
+     requestAnimationFrame(frame);
+   });
+
+ }catch(error){
+   console.error(error);
+   alert(error.message);
+ }finally{
+   if(localToken===playToken){
+     isPlaying=false;
+     playBtn.classList.remove('playing');
+     playBtn.textContent='click to play';
+
+     currentMovies.forEach(movie=>{
+       if(movie.element) movie.element.classList.remove('active');
+     });
+   }
+ }
+};
+
+selectActor(current);
+window.onresize=draw;
+</script>
+</body>
+</html>
